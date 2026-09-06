@@ -1,0 +1,15 @@
+{
+  "cohort_events": 997,
+  "cohort_variants": 2060,
+  "history_start": "2024-09-06",
+  "lines_fully_refunded": 71,
+  "lines_no_variant": 632,
+  "orders_cancelled": 76,
+  "orders_kept": 2878,
+  "orders_owner": 4,
+  "products_non_merchandise": 1,
+  "products_not_active": 10,
+  "snapshot": "2026-09-05",
+  "variants_left_truncated": 6102,
+  "variants_listed_after_snapshot": 5
+}
