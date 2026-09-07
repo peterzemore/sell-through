@@ -216,6 +216,13 @@ of the things on the shelf should have sold by now?*
   sold outside the system, returned, moved, or shrink. On the current snapshot that second
   list holds 203 variants, a quarter of everything unsold, and it is not a markdown list.
 
+`sellthrough clearance` turns the list into a **price plan under the store's own rule**: a
+product past its model median gets 10% off, 15% at 91 to 180 days past, 20% beyond, with a
+per-run cap, never under a 10% margin over cost, prices rounded up to a .49 or .99 ending so
+neither the cap nor the floor is ever crossed. It writes a CSV and a summary to a directory
+that is kept out of git and **changes nothing in the store**; applying a plan is a separate,
+deliberate step.
+
 The committed [`results/overdue.md`](results/overdue.md) is one run against live stock.
 It is a report, not a protocol artifact: it changes whenever stock or the cohort does, and
 CI does not regenerate it.
@@ -241,6 +248,7 @@ sellthrough describe --update-readme        # cohort tables, from the committed 
 sellthrough evaluate --bootstrap 1000 --seed 0 --update-readme   # models; ~2 s
 sellthrough gate --committed results/test.json                   # what CI runs
 sellthrough overdue --env-file shopify.env --top 40              # store report; omit --env-file for no stock
+sellthrough clearance --env-file shopify.env --max-cut 0.15      # price plan -> private/ (gitignored)
 sellthrough build --products products.jsonl --orders orders.jsonl \
     --exclude-emails owner@example.com      # rebuild the cohort from a raw pull
 ```
@@ -264,6 +272,7 @@ src/sellthrough/
   evaluate.py   validation sweep, selection, single test scoring
   gate.py       thresholds, protocol check, drift check
   overdue.py    the store report: level correction, overdue scores
+  clearance.py  the price plan under the owner's rule; never writes to the store
   stock.py      read-only live inventory, standard library only
   report.py     everything the README quotes
 data/cohort.csv        the public dataset, customer-free

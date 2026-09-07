@@ -67,6 +67,17 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   run -- a quarter of unsold listings. That is a data-quality finding for the store, not a
   modelling target; do not fold it into the overdue list.
 
+## Clearance plans
+
+- Peter's rule (2026-09-07): 10% past the product's model median, 15% at 91-180 days past,
+  20% beyond; **first run capped at 15%**; **never under 10% margin over cost**. Prices go UP
+  to the next .49/.99 ending above max(tier target, cap floor, margin floor), so a rounded
+  price can undershoot the tier but never breach the cap or the floor. A product whose
+  corrected median lies beyond 360 days is treated as median 360 (`cut-median-capped`).
+- Output goes to `private/` (gitignored) because it carries per-product cost. Applying a plan
+  to the store is NOT built; when it is, it must use bundle-tools' write-capable app, run from
+  Peter's machine, set compare_at_price = old price and tag `clearance`, and have a revert.
+
 ## Running it here
 
 `.venv/bin/sellthrough ...` from the repo root. Rebuild the cohort with

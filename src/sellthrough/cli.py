@@ -83,6 +83,23 @@ def cmd_overdue(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_clearance(a: argparse.Namespace) -> int:
+    from sellthrough.clearance import plan, summary, write_csv
+    from sellthrough.overdue import score_unsold
+    from sellthrough.stock import ShopifyAdmin, fetch_inventory, read_env_file
+    rows = read_cohort(paths.cohort_path())
+    api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
+    stock, cost = fetch_inventory(api)
+    items, level, model = score_unsold(rows, stock, min_days=a.min_days, cost=cost)
+    props = plan(items, model, level, max_cut=a.max_cut, min_margin=a.min_margin)
+    out_dir = Path(a.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+    write_csv(props, out_dir / "clearance_plan.csv")
+    (out_dir / "clearance_plan.md").write_text(summary(props, rows[0].snapshot, a.max_cut, a.min_margin))
+    n_cut = sum(1 for p in props if p.new_price is not None)
+    print(f"{len(props):,} on-shelf products considered, {n_cut:,} proposed cuts -> {out_dir}/clearance_plan.{{csv,md}}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="sellthrough")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -108,6 +125,13 @@ def main(argv=None) -> int:
     o.add_argument("--min-days", type=int, default=30)
     o.add_argument("--out", help="default results/overdue.md")
     o.set_defaults(fn=cmd_overdue)
+    c = sub.add_parser("clearance", help="write a clearance price plan (no store writes)")
+    c.add_argument("--env-file", required=True)
+    c.add_argument("--max-cut", type=float, default=0.15)
+    c.add_argument("--min-margin", type=float, default=0.10)
+    c.add_argument("--min-days", type=int, default=30)
+    c.add_argument("--out-dir", default="private", help="kept out of git by default")
+    c.set_defaults(fn=cmd_clearance)
     a = p.parse_args(argv)
     return a.fn(a)
 
