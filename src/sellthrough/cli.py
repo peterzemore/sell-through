@@ -64,6 +64,25 @@ def cmd_gate(a: argparse.Namespace) -> int:
     return 1 if fails else 0
 
 
+def cmd_overdue(a: argparse.Namespace) -> int:
+    from sellthrough.overdue import render, score_unsold
+    from sellthrough.stock import ShopifyAdmin, fetch_inventory, read_env_file
+    rows = read_cohort(paths.cohort_path())
+    stock = None
+    if a.env_file:
+        api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
+        stock = fetch_inventory(api)
+        print(f"live stock: {len(stock):,} variants")
+    items, level, _ = score_unsold(rows, stock, min_days=a.min_days)
+    text = render(items, level, rows[0].snapshot, a.top, stock is not None)
+    out = Path(a.out) if a.out else paths.root() / "results" / "overdue.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+    print(f"level: observed {100 * level.observed:.1f}% vs model {100 * level.predicted_before:.1f}% -> offset {level.offset:+.3f}")
+    print(f"{len(items):,} unsold listings scored -> {out}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="sellthrough")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -83,6 +102,12 @@ def main(argv=None) -> int:
     g = sub.add_parser("gate", help="check results/test.json against gates.toml (and a committed copy for drift)")
     g.add_argument("--committed", help="path to the committed test.json to compare point estimates against")
     g.set_defaults(fn=cmd_gate)
+    o = sub.add_parser("overdue", help="rank unsold listings by how overdue they are; live stock with --env-file")
+    o.add_argument("--env-file", help="SHOPIFY_STORE / SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET (read-only app)")
+    o.add_argument("--top", type=int, default=40)
+    o.add_argument("--min-days", type=int, default=30)
+    o.add_argument("--out", help="default results/overdue.md")
+    o.set_defaults(fn=cmd_overdue)
     a = p.parse_args(argv)
     return a.fn(a)
 

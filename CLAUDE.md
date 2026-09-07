@@ -48,6 +48,21 @@ plan: `~/.claude/plans/sell-through-scope.md`.
 - Listings dated after the snapshot (the last order date) are excluded; they used to
   produce negative `days`.
 
+## The store report
+
+- `sellthrough overdue --env-file <recommender's shopify.env>` uses the same read-only
+  Admin app as basket-recommender; never create a new Shopify app for this. Without
+  `--env-file` it runs with stock unknown.
+- The level correction is a bisection on a logit offset so the model's mean 90-day
+  probability on the recent window matches what happened there. If the recent 180-day
+  window has fewer than 50 listings it widens to all listings with a full horizon.
+- `results/overdue.md` is a report, not a protocol artifact. CI does not check it. Re-run
+  it after a fresh `build`; it carries on-hand counts, which is deliberate for the store's
+  use and acceptable to publish (the storefront shows availability anyway).
+- "Gone without a recorded sale" (zero on hand, no sale) was 203 variants on the first
+  run -- a quarter of unsold listings. That is a data-quality finding for the store, not a
+  modelling target; do not fold it into the overdue list.
+
 ## Running it here
 
 `.venv/bin/sellthrough ...` from the repo root. Rebuild the cohort with
