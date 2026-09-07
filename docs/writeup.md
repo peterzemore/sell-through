@@ -1,6 +1,4 @@
 # The number my store would have used was wrong by a factor of three
-*Draft for a pinned GitHub Discussion on peterzemore/sell-through. About 750 words.*
-
 How long does a newly listed item take to sell? For a retailer that is a markdown
 question, a buying question, and a cash question. My store's answer, had anyone asked
 the spreadsheet, would have been 73 days: the median time from listing to first sale
