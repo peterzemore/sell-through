@@ -15,7 +15,7 @@ INVENTORY_QUERY = """
 query($cursor: String) {
   productVariants(first: 250, after: $cursor) {
     pageInfo { hasNextPage endCursor }
-    edges { node { id inventoryQuantity } }
+    edges { node { id inventoryQuantity inventoryItem { unitCost { amount } } } }
   }
 }"""
 
@@ -77,15 +77,21 @@ class ShopifyAdmin:
         raise RuntimeError("throttled by Shopify too many times in a row")
 
 
-def fetch_inventory(api: ShopifyAdmin) -> dict[str, int]:
-    """On-hand quantity per variant id (string tail of the gid)."""
-    out: dict[str, int] = {}
+def fetch_inventory(api: ShopifyAdmin) -> tuple[dict[str, int], dict[str, float]]:
+    """On-hand quantity per variant id (string tail of the gid), and the store's
+    "cost per item" where it is set. Needs read_inventory."""
+    qty: dict[str, int] = {}
+    cost: dict[str, float] = {}
     cursor = None
     while True:
         page = api.graphql(INVENTORY_QUERY, {"cursor": cursor})["productVariants"]
         for edge in page["edges"]:
             n = edge["node"]
-            out[n["id"].rsplit("/", 1)[-1]] = int(n.get("inventoryQuantity") or 0)
+            vid = n["id"].rsplit("/", 1)[-1]
+            qty[vid] = int(n.get("inventoryQuantity") or 0)
+            uc = (n.get("inventoryItem") or {}).get("unitCost")
+            if uc and uc.get("amount") is not None:
+                cost[vid] = float(uc["amount"])
         if not page["pageInfo"]["hasNextPage"]:
-            return out
+            return qty, cost
         cursor = page["pageInfo"]["endCursor"]

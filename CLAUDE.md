@@ -59,6 +59,10 @@ plan: `~/.claude/plans/sell-through-scope.md`.
 - `results/overdue.md` is a report, not a protocol artifact. CI does not check it. Re-run
   it after a fresh `build`; it carries on-hand counts, which is deliberate for the store's
   use and acceptable to publish (the storefront shows availability anyway).
+- Cost comes from Shopify's `inventoryItem.unitCost` (cost per item), fetched in the same
+  inventory query. VaultBooks was checked as an alternative and does not link its inventory
+  items to Shopify variant ids (0 of 4,013), and its lot costs were seeded from Shopify in
+  the first place, so Shopify is the source of truth for cost.
 - "Gone without a recorded sale" (zero on hand, no sale) was 203 variants on the first
   run -- a quarter of unsold listings. That is a data-quality finding for the store, not a
   modelling target; do not fold it into the overdue list.

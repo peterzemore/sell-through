@@ -33,3 +33,18 @@ def test_unsold_scores_rise_with_age_and_render():
     with_stock = score_unsold(rows, stock=stock, min_days=1)[0]
     text2 = render(with_stock, level, rows[0].snapshot, top=5, stock_known=True)
     assert "Gone without a recorded sale (3)" in text2
+
+
+def test_cost_columns_and_capital_summary():
+    rows = make_rows(300)
+    stock = {r.variant_id: 2 for r in rows}
+    cost = {r.variant_id: round(r.price * 0.4, 2) for r in rows}
+    items, level, _ = score_unsold(rows, stock=stock, min_days=1, cost=cost)
+    o = items[0]
+    assert o.cost is not None and abs(o.margin - (o.row.price - o.cost)) < 1e-9
+    assert abs(o.margin_pct - 0.6) < 0.02
+    text = render(items, level, rows[0].snapshot, top=5, stock_known=True)
+    assert "What is sitting there" in text and "| Cost | Margin |" in text
+    # without cost the columns are absent and nothing breaks
+    items2, level2, _ = score_unsold(rows, stock=stock, min_days=1)
+    assert "| Cost |" not in render(items2, level2, rows[0].snapshot, top=5, stock_known=True)

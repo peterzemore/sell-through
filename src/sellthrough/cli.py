@@ -68,12 +68,12 @@ def cmd_overdue(a: argparse.Namespace) -> int:
     from sellthrough.overdue import render, score_unsold
     from sellthrough.stock import ShopifyAdmin, fetch_inventory, read_env_file
     rows = read_cohort(paths.cohort_path())
-    stock = None
+    stock = cost = None
     if a.env_file:
         api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
-        stock = fetch_inventory(api)
-        print(f"live stock: {len(stock):,} variants")
-    items, level, _ = score_unsold(rows, stock, min_days=a.min_days)
+        stock, cost = fetch_inventory(api)
+        print(f"live stock: {len(stock):,} variants, cost per item on {len(cost):,}")
+    items, level, _ = score_unsold(rows, stock, min_days=a.min_days, cost=cost)
     text = render(items, level, rows[0].snapshot, a.top, stock is not None)
     out = Path(a.out) if a.out else paths.root() / "results" / "overdue.md"
     out.parent.mkdir(parents=True, exist_ok=True)

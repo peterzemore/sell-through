@@ -207,8 +207,11 @@ of the things on the shelf should have sold by now?*
 - For every listing with no recorded sale, the score is the corrected probability that a
   listing with its price, tags, and listing-day size would have sold by its current age.
   A high probability on an unsold item is what "overdue" means; the list is sorted by it.
-- With `--env-file` pointing at a read-only Admin API app, live on-hand quantities split
-  the list in two: **on the shelf and overdue**, which is the markdown candidate list, and
+- With `--env-file` pointing at a read-only Admin API app, the same call brings back each
+  variant's **cost per item** where the store has set it (96% of the catalog), so the table
+  shows cost and margin at the current ticket price, and the report opens with what is
+  sitting there: units, retail value, and cost tied up. Cost is the floor a markdown can go
+  to and still return the money. Live on-hand quantities also split the list in two: **on the shelf and overdue**, which is the markdown candidate list, and
   **gone without a recorded sale**, which is zero on hand and no sale in the history:
   sold outside the system, returned, moved, or shrink. On the current snapshot that second
   list holds 203 variants, a quarter of everything unsold, and it is not a markdown list.

@@ -83,10 +83,20 @@ class Overdue:
     age_days: int
     p_sold_by_now: float
     stock: int | None      # None when unknown
+    cost: float | None = None   # the store's cost per item, when set
+
+    @property
+    def margin(self) -> float | None:
+        return None if self.cost is None else self.row.price - self.cost
+
+    @property
+    def margin_pct(self) -> float | None:
+        return None if self.cost is None or self.row.price <= 0 else (self.row.price - self.cost) / self.row.price
 
 
 def score_unsold(rows: list[Row], stock: dict[str, int] | None = None, min_days: int = 30,
-                 l2: float = 10.0) -> tuple[list[Overdue], LevelCorrection, DiscreteHazard]:
+                 l2: float = 10.0, cost: dict[str, float] | None = None
+                 ) -> tuple[list[Overdue], LevelCorrection, DiscreteHazard]:
     model = DiscreteHazard(l2=l2).fit(rows)
     level = fit_level(model, recent_window(rows))
     unsold = [r for r in rows if r.event == 0 and r.days >= min_days]
@@ -95,14 +105,20 @@ def score_unsold(rows: list[Row], stock: dict[str, int] | None = None, min_days:
     for r, age in zip(unsold, ages):
         t = min(float(age), model.max_days - 1)
         p = float(sold_by_with_offset(model, [r], t, level.offset)[0])
-        out.append(Overdue(r, int(age), p, None if stock is None else stock.get(r.variant_id, 0)))
+        out.append(Overdue(r, int(age), p, None if stock is None else stock.get(r.variant_id, 0),
+                           None if cost is None else cost.get(r.variant_id)))
     out.sort(key=lambda o: (-o.p_sold_by_now, -o.age_days))
     return out, level, model
+
+
+def _money(x: float | None) -> str:
+    return "" if x is None else f"${x:,.2f}"
 
 
 def render(items: list[Overdue], level: LevelCorrection, snapshot: dt.date, top: int, stock_known: bool) -> str:
     on_shelf = [o for o in items if o.stock is None or o.stock > 0]
     gone = [o for o in items if o.stock is not None and o.stock <= 0]
+    costed = [o for o in on_shelf if o.cost is not None]
     lines = [f"# Overdue listings as of {snapshot.isoformat()}", "",
              f"Listings with no recorded sale, ranked by the corrected probability that a listing "
              f"with the same price, tags, and listing-day size would have sold by its current age. "
@@ -113,16 +129,27 @@ def render(items: list[Overdue], level: LevelCorrection, snapshot: dt.date, top:
     if not stock_known:
         lines += ["Stock is **unknown** in this run (no credentials), so items that left the shelf without a "
                   "recorded sale are mixed in.", ""]
+    if stock_known and costed:
+        units = sum(o.stock or 0 for o in on_shelf)
+        tied = sum((o.cost or 0) * (o.stock or 0) for o in costed)
+        retail = sum(o.row.price * (o.stock or 0) for o in on_shelf)
+        lines += [f"**What is sitting there:** {len(on_shelf):,} unsold listings, {units:,} units on hand, "
+                  f"{_money(retail)} at ticket price. Cost per item is set on {len(costed):,} of them, "
+                  f"and those hold {_money(tied)} of cost. Margin below is at the current ticket price; "
+                  f"a markdown to cost is the floor at which the store gets its money back.", ""]
+    cost_cols = " Cost | Margin |" if costed else ""
     lines += [f"## {'On the shelf and overdue' if stock_known else 'Unsold listings'} (top {top} of {len(on_shelf)})", "",
-              "| # | Variant | Title | Price | Days listed | P(sold by now) |" + (" On hand |" if stock_known else ""),
-              "|---:|---|---|---:|---:|---:|" + ("---:|" if stock_known else "")]
+              "| # | Variant | Title | Price |" + cost_cols + " Days listed | P(sold by now) |" + (" On hand |" if stock_known else ""),
+              "|---:|---|---|---:|" + ("---:|---:|" if costed else "") + "---:|---:|" + ("---:|" if stock_known else "")]
     for i, o in enumerate(on_shelf[:top], 1):
-        lines.append(f"| {i} | {o.row.variant_id} | {o.row.title[:60]} | ${o.row.price:.2f} | {o.age_days} | "
-                     f"{100 * o.p_sold_by_now:.0f}% |" + (f" {o.stock} |" if stock_known else ""))
+        cost_cells = (f" {_money(o.cost)} | " + (f"{_money(o.margin)} ({100 * o.margin_pct:.0f}%)" if o.cost is not None else "") + " |") if costed else ""
+        lines.append(f"| {i} | {o.row.variant_id} | {o.row.title[:60]} | ${o.row.price:.2f} |" + cost_cells +
+                     f" {o.age_days} | {100 * o.p_sold_by_now:.0f}% |" + (f" {o.stock} |" if stock_known else ""))
     if stock_known:
         lines += ["", f"## Gone without a recorded sale ({len(gone)})", "",
-                  "Zero on hand and no sale in the order history: sold outside the system, returned to a "
-                  "distributor, moved to another channel, or shrink. Worth a look, not a markdown.", "",
+                  "Zero on hand and no sale in the order history: an inventory recount catching up with items "
+                  "already gone, sold outside the system, returned, or moved. A reconciliation record, not a "
+                  "markdown list.", "",
                   "| Variant | Title | Price | Days listed |", "|---|---|---:|---:|"]
         for o in gone[:top]:
             lines.append(f"| {o.row.variant_id} | {o.row.title[:60]} | ${o.row.price:.2f} | {o.age_days} |")
