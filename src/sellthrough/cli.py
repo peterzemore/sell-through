@@ -65,7 +65,7 @@ def cmd_gate(a: argparse.Namespace) -> int:
 
 
 def cmd_overdue(a: argparse.Namespace) -> int:
-    from sellthrough.overdue import render, score_unsold
+    from sellthrough.overdue import Overdue, render, score_unsold
     from sellthrough.stock import ShopifyAdmin, fetch_inventory, read_env_file
     rows = read_cohort(paths.cohort_path())
     stock = cost = None
@@ -74,10 +74,17 @@ def cmd_overdue(a: argparse.Namespace) -> int:
         stock, cost = fetch_inventory(api)
         print(f"live stock: {len(stock):,} variants, cost per item on {len(cost):,}")
     items, level, _ = score_unsold(rows, stock, min_days=a.min_days, cost=cost)
-    text = render(items, level, rows[0].snapshot, a.top, stock is not None)
+    # The committed report never carries cost: wholesale prices are private. The costed
+    # version, when cost is available, goes to private/ (gitignored).
+    public = [Overdue(o.row, o.age_days, o.p_sold_by_now, o.stock, None) for o in items]
     out = Path(a.out) if a.out else paths.root() / "results" / "overdue.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text)
+    out.write_text(render(public, level, rows[0].snapshot, a.top, stock is not None))
+    if cost:
+        priv = paths.root() / "private" / "overdue_with_cost.md"
+        priv.parent.mkdir(parents=True, exist_ok=True)
+        priv.write_text(render(items, level, rows[0].snapshot, a.top, True))
+        print(f"costed report (private): {priv}")
     print(f"level: observed {100 * level.observed:.1f}% vs model {100 * level.predicted_before:.1f}% -> offset {level.offset:+.3f}")
     print(f"{len(items):,} unsold listings scored -> {out}")
     return 0

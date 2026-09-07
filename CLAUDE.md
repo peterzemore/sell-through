@@ -56,9 +56,10 @@ plan: `~/.claude/plans/sell-through-scope.md`.
 - The level correction is a bisection on a logit offset so the model's mean 90-day
   probability on the recent window matches what happened there. If the recent 180-day
   window has fewer than 50 listings it widens to all listings with a full horizon.
-- `results/overdue.md` is a report, not a protocol artifact. CI does not check it. Re-run
-  it after a fresh `build`; it carries on-hand counts, which is deliberate for the store's
-  use and acceptable to publish (the storefront shows availability anyway).
+- `results/overdue.md` is a report, not a protocol artifact. CI does not check it. It carries
+  on-hand counts (the storefront shows availability anyway) and **never cost**: wholesale
+  prices are private (Peter, 2026-09-07). The costed copy goes to `private/`, gitignored.
+  Cost appeared in the public file for a few hours on 2026-09-07; history was rewritten.
 - Cost comes from Shopify's `inventoryItem.unitCost` (cost per item), fetched in the same
   inventory query. VaultBooks was checked as an alternative and does not link its inventory
   items to Shopify variant ids (0 of 4,013), and its lot costs were seeded from Shopify in
