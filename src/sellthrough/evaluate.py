@@ -74,9 +74,22 @@ def evaluate(rows: list[Row], draws: int, seed: int, out_dir: Path) -> tuple[dic
     test_models = baselines() + [m for m in cox_grid() + hazard_grid() if m.name in chosen]
     test = run_split(rows, TEST_ORIGIN, TEST_WINDOW_END, test_models, draws=draws, seed=seed, calibrate_best=True)
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "val.json").write_text(json.dumps(val, indent=2) + "\n")
-    (out_dir / "test.json").write_text(json.dumps(test, indent=2) + "\n")
+    (out_dir / "val.json").write_text(json.dumps(_rounded(val), indent=2) + "\n")
+    (out_dir / "test.json").write_text(json.dumps(_rounded(test), indent=2) + "\n")
     return val, test
+
+
+def _rounded(obj, places: int = 9):
+    """Floats differ across machines in the last couple of digits (BLAS, summation
+    order). Nine decimals is far below anything reported and makes the committed files
+    byte-stable, which is what lets CI diff them."""
+    if isinstance(obj, float):
+        return round(obj, places)
+    if isinstance(obj, dict):
+        return {k: _rounded(v, places) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_rounded(v, places) for v in obj]
+    return obj
 
 
 def pct(x: float) -> str:
