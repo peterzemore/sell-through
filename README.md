@@ -1,5 +1,7 @@
 # sell-through
 
+> **Write-up:** [The number the store would have used was wrong by a factor of three.](docs/writeup.md)
+
 How long does a newly listed item take to sell? For a real retail store, treated as
 what it is: right-censored time-to-event data, with a protocol stated before any model
 was written.
