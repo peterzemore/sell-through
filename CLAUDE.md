@@ -70,8 +70,12 @@ plan: `~/.claude/plans/sell-through-scope.md`.
 
 ## Clearance plans
 
-- Peter's rule (2026-09-07): 10% past the product's model median, 15% at 91-180 days past,
-  20% beyond; **first run capped at 15%**; **never under 10% margin over cost**. Prices go UP
+- Peter's rule (2026-09-07): **whole store**, every in-stock product; clock = days since
+  listing (never sold) or days since last sale (sold before); 10% past the product's model
+  median, 15% at 91-180 days past, 20% beyond; **first run capped at 15%**; **no sale in 400
+  days = the full 20% regardless of the cap**; **never under 10% margin over cost**. Products
+  listed before the order history are included (the left-truncation exclusion is a modelling
+  concern, not a clearance one); `store_items()` builds them from the raw pull. Prices go UP
   to the next .49/.99 ending above max(tier target, cap floor, margin floor), so a rounded
   price can undershoot the tier but never breach the cap or the floor. A product whose
   corrected median lies beyond 360 days is treated as median 360 (`cut-median-capped`).

@@ -91,19 +91,27 @@ def cmd_overdue(a: argparse.Namespace) -> int:
 
 
 def cmd_clearance(a: argparse.Namespace) -> int:
-    from sellthrough.clearance import plan, summary, write_csv
-    from sellthrough.overdue import score_unsold
+    from sellthrough.clearance import plan, store_items, summary, write_csv
+    from sellthrough.overdue import fit_level, recent_window
+    from sellthrough.models import DiscreteHazard
     from sellthrough.stock import ShopifyAdmin, fetch_inventory, read_env_file
     rows = read_cohort(paths.cohort_path())
+    stats = json.loads(paths.stats_path().read_text())
     api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
     stock, cost = fetch_inventory(api)
-    items, level, model = score_unsold(rows, stock, min_days=a.min_days, cost=cost)
+    model = DiscreteHazard(l2=10.0).fit(rows)
+    level = fit_level(model, recent_window(rows))
+    raw = Path(a.raw_dir)
+    emails = frozenset(e.strip().lower() for e in (a.exclude_emails or "").split(",") if e.strip())
+    import datetime as dt
+    items = store_items(list(_jsonl(raw / "products.jsonl")), list(_jsonl(raw / "orders.jsonl")), stock, cost,
+                        rows[0].snapshot, dt.date.fromisoformat(stats["history_start"]), emails)
     props = plan(items, model, level, max_cut=a.max_cut, min_margin=a.min_margin)
     out_dir = Path(a.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(props, out_dir / "clearance_plan.csv")
     (out_dir / "clearance_plan.md").write_text(summary(props, rows[0].snapshot, a.max_cut, a.min_margin))
     n_cut = sum(1 for p in props if p.new_price is not None)
-    print(f"{len(props):,} on-shelf products considered, {n_cut:,} proposed cuts -> {out_dir}/clearance_plan.{{csv,md}}")
+    print(f"{len(props):,} in-stock products considered, {n_cut:,} proposed cuts -> {out_dir}/clearance_plan.{{csv,md}}")
     return 0
 
 
@@ -137,6 +145,8 @@ def main(argv=None) -> int:
     c.add_argument("--max-cut", type=float, default=0.15)
     c.add_argument("--min-margin", type=float, default=0.10)
     c.add_argument("--min-days", type=int, default=30)
+    c.add_argument("--raw-dir", required=True, help="directory holding products.jsonl and orders.jsonl (the raw pull)")
+    c.add_argument("--exclude-emails", help="owner/staff emails whose orders are not sales")
     c.add_argument("--out-dir", default="private", help="kept out of git by default")
     c.set_defaults(fn=cmd_clearance)
     a = p.parse_args(argv)

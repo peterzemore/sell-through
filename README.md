@@ -216,10 +216,12 @@ of the things on the shelf should have sold by now?*
   sold outside the system, returned, moved, or shrink. On the current snapshot that second
   list holds 203 variants, a quarter of everything unsold, and it is not a markdown list.
 
-`sellthrough clearance` turns the list into a **price plan under the store's own rule**: a
-product past its model median gets 10% off, 15% at 91 to 180 days past, 20% beyond, with a
-per-run cap, never under a 10% margin over cost, prices rounded up to a .49 or .99 ending so
-neither the cap nor the floor is ever crossed. It writes a CSV and a summary to a directory
+`sellthrough clearance` turns this into a **price plan for the whole store under the owner's
+rule**. Every in-stock product is considered, on one of two clocks: days since listing if it
+has never sold, days since its last sale if it has. Past the product's model median: 10% off,
+15% at 91 to 180 days past, 20% beyond, with a per-run cap; any product with no sale in 400
+days gets the full 20% regardless of the cap; never under a 10% margin over cost; prices
+rounded up to a .49 or .99 ending so neither the rule nor the floor is ever crossed. It writes a CSV and a summary to a directory
 that is kept out of git and **changes nothing in the store**; applying a plan is a separate,
 deliberate step.
 
