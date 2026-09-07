@@ -115,6 +115,30 @@ def cmd_clearance(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_apply(a: argparse.Namespace) -> int:
+    import datetime as dt
+    from sellthrough.apply import apply, read_plan
+    from sellthrough.stock import ShopifyAdmin, read_env_file
+    targets = read_plan(Path(a.plan))
+    api = ShopifyAdmin.from_env(read_env_file(Path(a.write_env_file)))
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log = Path(a.log) if a.log else Path(a.plan).parent / f"applied-{stamp}.csv"
+    mode = "WRITING to the store" if a.yes else "dry run (no writes)"
+    print(f"{len(targets):,} planned cuts; {mode}; limit {a.limit or 'none'}; log -> {log}")
+    counts = apply(api, targets, log, write=a.yes, limit=a.limit)
+    print("result:", counts)
+    return 0
+
+
+def cmd_revert(a: argparse.Namespace) -> int:
+    from sellthrough.apply import revert
+    from sellthrough.stock import ShopifyAdmin, read_env_file
+    api = ShopifyAdmin.from_env(read_env_file(Path(a.write_env_file)))
+    print("WRITING (revert)" if a.yes else "dry run (no writes)")
+    print("result:", revert(api, Path(a.log), write=a.yes))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="sellthrough")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -149,6 +173,18 @@ def main(argv=None) -> int:
     c.add_argument("--exclude-emails", help="owner/staff emails whose orders are not sales")
     c.add_argument("--out-dir", default="private", help="kept out of git by default")
     c.set_defaults(fn=cmd_clearance)
+    ap = sub.add_parser("apply", help="apply an approved clearance plan (dry run unless --yes)")
+    ap.add_argument("--plan", required=True, help="clearance_plan.csv from `clearance`")
+    ap.add_argument("--write-env-file", required=True, help="env file of a write_products-capable app")
+    ap.add_argument("--limit", type=int, help="stop after this many applied products (a pilot batch)")
+    ap.add_argument("--log", help="where to record what was changed (default next to the plan)")
+    ap.add_argument("--yes", action="store_true", help="actually write; without it nothing changes")
+    ap.set_defaults(fn=cmd_apply)
+    rv = sub.add_parser("revert", help="undo an applied log (dry run unless --yes)")
+    rv.add_argument("--log", required=True)
+    rv.add_argument("--write-env-file", required=True)
+    rv.add_argument("--yes", action="store_true")
+    rv.set_defaults(fn=cmd_revert)
     a = p.parse_args(argv)
     return a.fn(a)
 

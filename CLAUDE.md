@@ -79,9 +79,18 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   to the next .49/.99 ending above max(tier target, cap floor, margin floor), so a rounded
   price can undershoot the tier but never breach the cap or the floor. A product whose
   corrected median lies beyond 360 days is treated as median 360 (`cut-median-capped`).
-- Output goes to `private/` (gitignored) because it carries per-product cost. Applying a plan
-  to the store is NOT built; when it is, it must use bundle-tools' write-capable app, run from
-  Peter's machine, set compare_at_price = old price and tag `clearance`, and have a revert.
+- Output goes to `private/` (gitignored) because it carries per-product cost.
+- `apply` uses **bundle-tools' write-capable app** (`~/Projects/business/PeteZ PopZ/bundle-tools/.env`,
+  `write_products`), run from Peter's machine only, never from a service. Dry run by default;
+  `--yes` writes; `--limit N` for a pilot batch. Each product is re-read first: `price-changed`
+  (live price != plan) and `already-on-sale` (a compare-at above the plan price) are skipped, so
+  a plan can be applied days after it was written without clobbering manual edits. Logs land in
+  `private/applied-<stamp>.csv`; `revert --log` undoes only rows whose live price still equals
+  what apply set. Reading 2,219 products one by one takes ~12 minutes; that is deliberate
+  (per-product safety check) -- do not batch it away.
+- Shopify admin side (manual, once): Products > Collections > Create > Automated, condition
+  "Product tag is equal to clearance"; then Online Store > Navigation > add the collection to
+  the main menu. The theme already renders compare-at strike-through prices.
 
 ## Running it here
 

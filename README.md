@@ -222,8 +222,17 @@ has never sold, days since its last sale if it has. Past the product's model med
 15% at 91 to 180 days past, 20% beyond, with a per-run cap; any product with no sale in 400
 days gets the full 20% regardless of the cap; never under a 10% margin over cost; prices
 rounded up to a .49 or .99 ending so neither the rule nor the floor is ever crossed. It writes a CSV and a summary to a directory
-that is kept out of git and **changes nothing in the store**; applying a plan is a separate,
-deliberate step.
+that is kept out of git and **changes nothing in the store**.
+
+`sellthrough apply` is the separate, deliberate step. It is a dry run unless told `--yes`,
+takes a write-capable app's credentials explicitly, re-reads every product first and skips
+any whose live price no longer matches the plan or that is already applied, then sets the
+old price as the compare-at price (the storefront's strike-through), sets the new price, and
+adds a `clearance` tag. Nothing else on the product changes. Every write is logged, and
+`sellthrough revert` reads that log to restore prices and drop the tag, again only where the
+live price still equals what apply set. `--limit N` applies a pilot batch first. A Shopify
+automated collection with the rule "tag equals clearance" then becomes the store's sale
+section and maintains itself.
 
 The committed [`results/overdue.md`](results/overdue.md) is one run against live stock.
 It is a report, not a protocol artifact: it changes whenever stock or the cohort does, and
@@ -250,7 +259,9 @@ sellthrough describe --update-readme        # cohort tables, from the committed 
 sellthrough evaluate --bootstrap 1000 --seed 0 --update-readme   # models; ~2 s
 sellthrough gate --committed results/test.json                   # what CI runs
 sellthrough overdue --env-file shopify.env --top 40              # store report; omit --env-file for no stock
-sellthrough clearance --env-file shopify.env --max-cut 0.15      # price plan -> private/ (gitignored)
+sellthrough clearance --env-file shopify.env --raw-dir <raw pull> --max-cut 0.15   # price plan -> private/
+sellthrough apply --plan private/clearance_plan.csv --write-env-file <write app>  # dry run; add --yes to write
+sellthrough revert --log private/applied-<stamp>.csv --write-env-file <write app>  # dry run; add --yes
 sellthrough build --products products.jsonl --orders orders.jsonl \
     --exclude-emails owner@example.com      # rebuild the cohort from a raw pull
 ```
@@ -275,6 +286,7 @@ src/sellthrough/
   gate.py       thresholds, protocol check, drift check
   overdue.py    the store report: level correction, overdue scores
   clearance.py  the price plan under the owner's rule; never writes to the store
+  apply.py      apply / revert a plan: live-price check, compare-at + price + tag, logged
   stock.py      read-only live inventory, standard library only
   report.py     everything the README quotes
 data/cohort.csv        the public dataset, customer-free
