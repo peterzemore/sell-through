@@ -1,0 +1,18 @@
+# Regression gates for `sellthrough gate`. Thresholds sit just under the numbers the
+# committed results/test.json reports; raise one only after the model already clears
+# it. The protocol lines must match protocol.py -- a mismatch fails the gate on purpose.
+
+[protocol]
+horizon_days = 90
+test_origin = "2026-01-01"
+test_window_end = "2026-06-07"
+min_test_listings = 300
+
+[thresholds]
+# best model on test, by Brier skill against the Kaplan-Meier null
+brier_skill_min = 0.03
+auc_min = 0.60
+concordance_min = 0.57
+# every model's mean predicted probability must stay within this of the observed rate
+# on test; a model that is discriminating but badly miscalibrated is not shippable
+calibration_gap_max = 0.15

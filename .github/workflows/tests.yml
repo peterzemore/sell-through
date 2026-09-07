@@ -13,3 +13,18 @@ jobs:
         run: sellthrough describe --update-readme
       - name: the committed README and results must match a fresh run
         run: git diff --exit-code -- README.md results/describe.json
+  evaluate-and-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev]"
+      - name: keep the committed test results to compare against
+        run: cp results/test.json /tmp/committed.json
+      - name: re-run the whole evaluation from the committed cohort (same draws and seed as the README)
+        run: sellthrough evaluate --bootstrap 1000 --seed 0 --update-readme
+      - name: gates, and fresh point estimates must equal the committed ones
+        run: sellthrough gate --committed /tmp/committed.json
+      - name: the committed README and results must match the fresh run
+        run: git diff --exit-code -- README.md results/val.json results/test.json

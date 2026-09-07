@@ -12,10 +12,9 @@ committed to this repo, so everything here runs from a clean clone with no crede
 Every number in this README is computed from that file by `sellthrough describe`; CI
 regenerates them on every push and fails if the committed text drifts.
 
-**Status: milestone 1 of 3.** Cohort, protocol, and Kaplan-Meier baselines are done
-and are what this README reports. Models (milestone 2) and the store-facing "overdue
-listings" report (milestone 3) come next; the split and the metrics they will be judged
-on are already fixed below.
+**Status: milestone 2 of 3.** Cohort, protocol, Kaplan-Meier baselines, and two model
+families evaluated on a pre-registered rolling-origin split with a regression gate in CI.
+The store-facing "overdue listings" report (milestone 3) comes next.
 
 ## The question
 
@@ -105,6 +104,95 @@ numbers any model has to improve on.
 | title: rarity word in title | 240 | 113 | 330 | 16.0% [11.9, 21.4] | 21.5% [16.7, 27.4] | 30.4% [24.8, 37.0] | 41.2% [34.9, 48.3] |
 <!-- km-table:end -->
 
+## Models
+
+Milestone 2. Two model families are fit on the same design matrix: the listing's price
+(log, plus band), the size of its listing day (log, plus bucket), rarity words parsed from
+the title, and every tag carried by at least thirty listings in the fit set. Columns that
+do not vary in the fit set are dropped there, so the evaluation listings never influence
+the features.
+
+- **Cox proportional hazards** (lifelines), L2 penalised; penalty chosen on validation.
+- **Discrete-time hazard**: follow-up cut into ten-day periods, one logistic regression
+  over listing-periods with a free intercept per period, fit by penalised IRLS in numpy.
+  It makes no proportional-hazards assumption, and it is the model milestone 3 serves.
+
+Both are judged against three Kaplan-Meier baselines: one curve for everyone (the null
+that defines skill), one per price band, and one per price band and batch bucket.
+
+<!-- results:start -->
+**Validation** (fit on listings before 2025-07-01, censored there; scored on 596 listings from 2025-07-01 to 2025-12-31, 27.0% sold within 90 days). Selection metric is Brier skill.
+
+| Model | Brier skill @90 | AUC @90 | Concordance | Mean predicted |
+|---|---:|---:|---:|---:|
+| `km_null` | +0.000 | 0.500 | 0.500 | 33.8% |
+| `km_by_price_band` | +0.006 | 0.544 | 0.544 | 33.3% |
+| `km_by_price_x_batch` | +0.020 | 0.594 | 0.561 | 33.1% |
+| `cox(penalizer=0.05)` | +0.023 | 0.586 | 0.549 | 29.9% |
+| `cox(penalizer=0.2)` **(chosen)** | +0.031 | 0.592 | 0.553 | 31.6% |
+| `cox(penalizer=1.0)` | +0.029 | 0.595 | 0.555 | 33.0% |
+| `dthazard(l2=0.1, bin=10d)` | +0.012 | 0.586 | 0.551 | 28.0% |
+| `dthazard(l2=1.0, bin=10d)` | +0.018 | 0.583 | 0.547 | 28.0% |
+| `dthazard(l2=10.0, bin=10d)` **(chosen)** | +0.024 | 0.574 | 0.538 | 28.7% |
+
+**Test** (fit on listings before 2026-01-01, censored there; scored once on 319 listings from 2026-01-01 to 2026-06-07, 38.6% sold within 90 days; 1,000-draw bootstrap over listings).
+
+| Model | Brier @90 | Brier skill @90 [95% CI] | AUC @90 [95% CI] | Concordance | Mean predicted |
+|---|---:|---:|---:|---:|---:|
+| `km_null` | 0.2428 | +0.000 [+0.000, +0.000] | 0.500 [0.500, 0.500] | 0.500 | 30.9% |
+| `km_by_price_band` | 0.2439 | -0.004 [-0.025, +0.015] | 0.488 [0.425, 0.552] | 0.501 | 31.6% |
+| `km_by_price_x_batch` | 0.2438 | -0.004 [-0.040, +0.033] | 0.528 [0.463, 0.595] | 0.542 | 31.6% |
+| `cox(penalizer=0.2)` | 0.2294 | +0.055 [+0.022, +0.092] | 0.647 [0.586, 0.711] | 0.611 | 31.1% |
+| `dthazard(l2=10.0, bin=10d)` | 0.2305 | +0.051 [+0.019, +0.088] | 0.648 [0.589, 0.713] | 0.613 | 30.3% |
+
+**Calibration of `cox(penalizer=0.2)` on test**, by decile of predicted probability (observed = share that sold within 90 days):
+
+| Decile | n | Predicted | Observed |
+|---:|---:|---:|---:|
+| 1 | 32 | 19.3% | 18.8% |
+| 2 | 32 | 23.8% | 28.1% |
+| 3 | 32 | 25.6% | 18.8% |
+| 4 | 32 | 27.1% | 34.4% |
+| 5 | 32 | 29.2% | 34.4% |
+| 6 | 32 | 31.3% | 50.0% |
+| 7 | 32 | 33.7% | 65.6% |
+| 8 | 32 | 36.4% | 25.0% |
+| 9 | 32 | 39.0% | 43.8% |
+| 10 | 31 | 45.9% | 67.7% |
+<!-- results:end -->
+
+<!-- results-prose:start -->
+### What the models say
+
+- **Listing attributes predict a little, and it is real.** On test, Cox reaches a Brier
+  skill of +0.055 [+0.022, +0.092] against the Kaplan-Meier null and an AUC of 0.647
+  [0.586, 0.711]; the discrete-time hazard model is indistinguishable from it (+0.051,
+  0.648). Both intervals exclude zero. A skill of five percent is small: most of *when* an
+  item first sells is not in its price, its tags, or its listing day. The ranking is the
+  usable part, and an AUC of 0.65 is enough to triage markdowns, not to forecast a date.
+- **The stratified baselines did not survive the move from validation to test.** Price
+  band and batch bucket together earned +0.020 on validation and -0.004 on test. Five or
+  six Kaplan-Meier curves fit on a few hundred listings each carry the noise of their
+  window; the penalised models, which share strength across every feature, did not fall.
+- **Every model carries the old level, and the level moved.** Listings in the test window
+  sold within 90 days 38.6% of the time; the null fit on the earlier listings predicted
+  30.9%, and so, near enough, did every other model. Discrimination transferred and
+  calibration did not. That is what a market shift looks like from inside a rolling-origin
+  split, and it is why milestone 3 recomputes the current base rate at serving time rather
+  than trusting the fitted level.
+- **The calibration table is noisy by construction.** Thirty-two listings per decile puts a
+  sixteen-point interval on each observed rate, so read the trend (roughly monotone, with
+  the top deciles under-predicted) and not any single row.
+- **Proportional hazards is not the limit.** The discrete-time model drops that assumption
+  and lands on the same numbers, so the ceiling here is the information in the features,
+  not the functional form. It is the model served in milestone 3 because it produces a
+  survival curve at any day in plain numpy.
+
+Selection used validation only; the two chosen configurations were scored on test once.
+Gates in `gates.toml` sit just under these numbers and CI re-runs the whole evaluation on
+every push, failing on a regression or on drift from the committed `results/test.json`.
+<!-- results-prose:end -->
+
 ## What this data cannot say
 
 - **Survivorship.** Products deleted from the store are not in the pull. If deletion
@@ -122,7 +210,9 @@ numbers any model has to improve on.
 ```
 pip install -e ".[dev]"
 pytest -q
-sellthrough describe --update-readme        # from the committed cohort, no credentials
+sellthrough describe --update-readme        # cohort tables, from the committed cohort
+sellthrough evaluate --bootstrap 1000 --seed 0 --update-readme   # models; ~2 s
+sellthrough gate --committed results/test.json                   # what CI runs
 sellthrough build --products products.jsonl --orders orders.jsonl \
     --exclude-emails owner@example.com      # rebuild the cohort from a raw pull
 ```
@@ -140,9 +230,16 @@ src/sellthrough/
   cohort.py     raw pull -> one row per listing (event, days, censoring, batch size)
   km.py         Kaplan-Meier with Greenwood variance and log-log limits, numpy only
   splits.py     rolling-origin fit / eval sets
+  features.py   design matrix; vocabulary learned from the fit set only
+  models.py     KM null and strata, Cox PH (lifelines), discrete-time hazard (numpy)
+  metrics.py    Brier, skill, AUC, Harrell's C, calibration, bootstrap
+  evaluate.py   validation sweep, selection, single test scoring
+  gate.py       thresholds, protocol check, drift check
   report.py     everything the README quotes
 data/cohort.csv        the public dataset, customer-free
-results/describe.json  the numbers, regenerated in CI
+results/describe.json  cohort numbers, regenerated in CI
+results/val.json       validation sweep (selection only)
+results/test.json      the test numbers CI checks a fresh run against
 ```
 
 MIT licensed.

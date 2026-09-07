@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sellthrough import paths
 from sellthrough.cohort import build, read_cohort, write_cohort
-from sellthrough.report import describe, dump, update_readme
+from sellthrough.report import describe, dump, update_block, update_readme
 
 
 def _jsonl(p: Path):
@@ -40,6 +40,30 @@ def cmd_describe(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_evaluate(a: argparse.Namespace) -> int:
+    from sellthrough.evaluate import evaluate, render_results
+    rows = read_cohort(paths.cohort_path())
+    val, test = evaluate(rows, draws=a.bootstrap, seed=a.seed, out_dir=paths.root() / "results")
+    best = max(test["results"], key=lambda r: r["brier_skill"])
+    print(f"val chose {val['chosen']}; test best: {best['model']} skill {best['brier_skill']:+.3f} auc {best['auc']:.3f}")
+    if a.update_readme:
+        text = paths.readme_path().read_text()
+        paths.readme_path().write_text(update_block(text, "results", render_results(val, test)))
+        print(f"README updated: {paths.readme_path()}")
+    return 0
+
+
+def cmd_gate(a: argparse.Namespace) -> int:
+    from sellthrough.gate import check, load, load_gates
+    test = load(paths.root() / "results" / "test.json")
+    committed = load(Path(a.committed)) if a.committed else None
+    fails = check(test, load_gates(paths.root() / "gates.toml"), committed)
+    for f in fails:
+        print(f"GATE FAIL: {f}")
+    print("gates: " + ("FAIL" if fails else "pass"))
+    return 1 if fails else 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="sellthrough")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -51,6 +75,14 @@ def main(argv=None) -> int:
     d = sub.add_parser("describe", help="Kaplan-Meier tables and split sizes from the committed cohort")
     d.add_argument("--update-readme", action="store_true")
     d.set_defaults(fn=cmd_describe)
+    e = sub.add_parser("evaluate", help="validation sweep, selection, single test scoring")
+    e.add_argument("--bootstrap", type=int, default=1000)
+    e.add_argument("--seed", type=int, default=0)
+    e.add_argument("--update-readme", action="store_true")
+    e.set_defaults(fn=cmd_evaluate)
+    g = sub.add_parser("gate", help="check results/test.json against gates.toml (and a committed copy for drift)")
+    g.add_argument("--committed", help="path to the committed test.json to compare point estimates against")
+    g.set_defaults(fn=cmd_gate)
     a = p.parse_args(argv)
     return a.fn(a)
 

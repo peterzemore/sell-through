@@ -12,7 +12,8 @@ license = { text = "MIT" }
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+models = ["lifelines>=0.30", "pandas>=2.2"]
+dev = ["pytest>=8", "lifelines>=0.30", "pandas>=2.2"]
 
 [project.scripts]
 sellthrough = "sellthrough.cli:main"

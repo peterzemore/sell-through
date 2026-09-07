@@ -12,10 +12,29 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   together after any change that moves a number.
 - **The protocol lives in `protocol.py`.** Split dates and the horizon are quoted by the
   README tables; changing them is a deliberate protocol edit, never a side effect.
-- **Validation selects, test is scored once** (milestone 2 onward).
+- **Validation selects, test is scored once.** `evaluate` sweeps the model grids on the
+  validation split, picks the best Cox and the best discrete-hazard config by Brier skill,
+  and scores only those plus the baselines on test. Don't re-run the sweep because a test
+  number looks improvable.
+- **Regenerate models with** `sellthrough evaluate --bootstrap 1000 --seed 0 --update-readme`
+  **and commit results/ + README together.** CI re-runs the identical command (1000 draws, seed 0;
+  it takes about two seconds), checks gates.toml, compares point estimates to the committed
+  results/test.json to 1e-9, and `git diff`s README.md and both results files. Timing
+  fields are deliberately absent from the outputs so the diff can be exact.
+- **Gates sit just under today's numbers** (skill 0.03, AUC 0.60, C 0.57, calibration gap
+  0.15). Raise one only after the model already clears it.
 - **Owner emails are a CLI flag at build time**, never a constant, never committed.
 
 ## Things not obvious from the code
+
+- The design matrix drops one level per one-hot group and every column with zero variance
+  in the fit set (`Vocabulary.active`). Without that, lifelines' Cox fitter divides by a
+  zero standard deviation and dies on the first Newton step with "delta contains nan".
+- Cox durations are `days + 0.5` because a same-day sale is day 0 and lifelines wants
+  positive durations; the shift is applied to prediction times too, so S(90) is honest.
+- The test window sold ~8 points faster than any earlier window and every model carried
+  the old level (mean predicted 31% vs 38.6% observed). Milestone 3 must recompute the
+  current base rate at serving time; do not "fix" this by refitting on test.
 
 - The cohort is built from basket-recommender's raw pull (`../basket-recommender/data/raw/`),
   which came through Ada's read-only Shopify app. Do not create a new Shopify app or
