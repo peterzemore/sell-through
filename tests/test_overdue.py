@@ -26,6 +26,10 @@ def test_unsold_scores_rise_with_age_and_render():
     assert old.p_sold_by_now >= young.p_sold_by_now
     text = render(items, level, rows[0].snapshot, top=5, stock_known=False)
     assert "Overdue listings" in text and "unknown" in text
-    with_stock = score_unsold(rows, stock={o.row.variant_id: 0 for o in items[:3]}, min_days=1)[0]
+    # a variant absent from the stock map counts as zero on hand (deleted or gone), so
+    # the test map must cover every listing to mean "these three are gone, the rest are not"
+    stock = {r.variant_id: 4 for r in rows}
+    stock.update({o.row.variant_id: 0 for o in items[:3]})
+    with_stock = score_unsold(rows, stock=stock, min_days=1)[0]
     text2 = render(with_stock, level, rows[0].snapshot, top=5, stock_known=True)
     assert "Gone without a recorded sale (3)" in text2
