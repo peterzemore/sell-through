@@ -150,10 +150,18 @@ def apply(api: ShopifyAdmin, targets: list[Target], log_path: Path, write: bool,
     return counts
 
 
-def revert(api: ShopifyAdmin, log_path: Path, write: bool, progress=print) -> dict:
+def revert(api: ShopifyAdmin, log_path: Path, write: bool, progress=print,
+           title_contains: list[str] | None = None) -> dict:
+    """Undo applied rows from a log. With title_contains, only rows whose title contains
+    one of the given phrases (case-insensitive) are touched."""
     counts: dict[str, int] = {}
     with log_path.open(newline="") as f:
         rows = [r for r in csv.DictReader(f) if r["status"] == "applied"]
+    if title_contains:
+        needles = [t.lower() for t in title_contains]
+        rows = [r for r in rows if any(n in r["title"].lower() for n in needles)]
+        for r in rows:
+            progress(f"  match: {r['title'][:70]}  {r['new_price']} -> back to {r['old_price']}")
     for r in rows:
         live = read_variant(api, r["variant_id"])
         if live is None:

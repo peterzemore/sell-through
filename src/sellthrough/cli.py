@@ -135,7 +135,7 @@ def cmd_revert(a: argparse.Namespace) -> int:
     from sellthrough.stock import ShopifyAdmin, read_env_file
     api = ShopifyAdmin.from_env(read_env_file(Path(a.write_env_file)))
     print("WRITING (revert)" if a.yes else "dry run (no writes)")
-    print("result:", revert(api, Path(a.log), write=a.yes))
+    print("result:", revert(api, Path(a.log), write=a.yes, title_contains=a.title_contains))
     return 0
 
 
@@ -183,6 +183,7 @@ def main(argv=None) -> int:
     rv = sub.add_parser("revert", help="undo an applied log (dry run unless --yes)")
     rv.add_argument("--log", required=True)
     rv.add_argument("--write-env-file", required=True)
+    rv.add_argument("--title-contains", action="append", help="only rows whose title contains this (repeatable)")
     rv.add_argument("--yes", action="store_true")
     rv.set_defaults(fn=cmd_revert)
     a = p.parse_args(argv)
