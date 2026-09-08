@@ -97,3 +97,16 @@ plan: `~/.claude/plans/sell-through-scope.md`.
 `.venv/bin/sellthrough ...` from the repo root. Rebuild the cohort with
 `sellthrough build --products <raw>/products.jsonl --orders <raw>/orders.jsonl
 --exclude-emails <the three owner addresses>`; then `describe --update-readme`.
+
+## State of the live store (as of 2026-09-07 night)
+
+- Clearance plan v2 APPLIED: pilot of 25 (`private/applied-20260907-174245.csv`) then the rest
+  (`private/applied-20260907-200844.csv`, 2,186). 7 skipped as price-changed, 1 already-on-sale.
+  Four products reverted at Peter's request via `revert --title-contains` (Clark Griswold #242,
+  Cousin Eddie, Derpy with Sussie, Courage the Cowardly Dog #1070). Net ~2,207 tagged `clearance`.
+- Collection: title **ON-SALE**, handle `on-sale` (renamed from Clearance), automated on tag
+  `clearance`, published to Online Store by Peter, menu link added. The TAG stays `clearance`.
+- Next pass: after the next inventory count; Peter intends to lift the 15% cap then. Re-run
+  `clearance` -> read `private/clearance_plan.md` -> `apply --limit` pilot -> `apply`.
+- `apply --yes` over the whole plan was blocked by the assistant's permission layer; Peter ran it
+  himself with the `!` prefix. Expect the same next time.
