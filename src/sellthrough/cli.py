@@ -71,7 +71,7 @@ def cmd_overdue(a: argparse.Namespace) -> int:
     stock = cost = None
     if a.env_file:
         api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
-        stock, cost = fetch_inventory(api)
+        stock, cost, _ = fetch_inventory(api)
         print(f"live stock: {len(stock):,} variants, cost per item on {len(cost):,}")
     items, level, _ = score_unsold(rows, stock, min_days=a.min_days, cost=cost)
     # The committed report never carries cost: wholesale prices are private. The costed
@@ -98,14 +98,14 @@ def cmd_clearance(a: argparse.Namespace) -> int:
     rows = read_cohort(paths.cohort_path())
     stats = json.loads(paths.stats_path().read_text())
     api = ShopifyAdmin.from_env(read_env_file(Path(a.env_file)))
-    stock, cost = fetch_inventory(api)
+    stock, cost, compare_at = fetch_inventory(api)
     model = DiscreteHazard(l2=10.0).fit(rows)
     level = fit_level(model, recent_window(rows))
     raw = Path(a.raw_dir)
     emails = frozenset(e.strip().lower() for e in (a.exclude_emails or "").split(",") if e.strip())
     import datetime as dt
     items = store_items(list(_jsonl(raw / "products.jsonl")), list(_jsonl(raw / "orders.jsonl")), stock, cost,
-                        rows[0].snapshot, dt.date.fromisoformat(stats["history_start"]), emails)
+                        rows[0].snapshot, dt.date.fromisoformat(stats["history_start"]), emails, compare_at)
     props = plan(items, model, level, max_cut=a.max_cut, min_margin=a.min_margin)
     out_dir = Path(a.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(props, out_dir / "clearance_plan.csv")

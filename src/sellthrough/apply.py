@@ -54,7 +54,7 @@ class Target:
     variant_id: str
     product_id: str
     title: str
-    plan_price: float      # what the plan believed the current price was
+    plan_price: float      # the ORIGINAL price the plan worked from (compare-at when already on sale)
     new_price: float
 
 
@@ -102,14 +102,16 @@ def decide(live: dict | None, t: Target) -> str:
     """What apply should do for one target, given the live variant."""
     if live is None:
         return "missing"
-    if abs(live["price"] - t.new_price) < 0.005 and live["compare_at"] is not None \
-            and abs(live["compare_at"] - t.plan_price) < 0.005:
+    live_base = live["price"] if live["compare_at"] is None else live["compare_at"]
+    if abs(live["price"] - t.new_price) < 0.005 and abs(live_base - t.plan_price) < 0.005:
         return "already-applied"
-    if abs(live["price"] - t.plan_price) >= 0.005:
-        return "price-changed"
-    if live["compare_at"] is not None and live["compare_at"] > t.plan_price + 0.005:
-        return "already-on-sale"     # someone set a compare-at above the plan's price; leave it alone
-    return "apply"
+    if abs(live_base - t.plan_price) >= 0.005:
+        if live["compare_at"] is not None and live["compare_at"] > t.plan_price + 0.005:
+            return "already-on-sale"     # someone set a compare-at above the plan's price; leave it alone
+        return "price-changed"           # the original price is not what the plan saw
+    if live["compare_at"] is not None and live["price"] < t.new_price - 0.005:
+        return "price-changed"           # cut deeper by hand than the rule says; leave it alone
+    return "apply"                       # fresh cut, or an existing markdown moving to a deeper tier
 
 
 def apply(api: ShopifyAdmin, targets: list[Target], log_path: Path, write: bool, limit: int | None = None,

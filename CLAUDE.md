@@ -134,3 +134,19 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   re-priced (`private/applied-loungefly-caps-20260908-113128.csv`). Every product the rule matches now
   carries the tag `loungefly`; the storefront collection **Loungefly Sale** (`loungefly-sale`) is
   automated on tag=clearance AND tag=loungefly. New Loungefly listings need that tag to show up there.
+
+## Weekly runs: original price, deepening, opt-out (found on Otto's first dry run, 2026-09-09)
+
+- The plan works from the **original price**: `fetch_inventory` now returns compare-at prices too, and
+  `store_items(..., compare_at=)` uses compare-at as the rule's price when it is above the live price. Before this,
+  a second run started from the already-reduced price and proposed another 20% on top (10.49 -> 8.49); only
+  apply's "already-on-sale" guard stood in the way, and the same guard blocked legitimate deeper tiers.
+- `apply.decide()` compares against that original price: `already-applied` when live price == plan and the
+  compare-at is the original; **`apply` also when a product sits at a shallower markdown from the same original**
+  (the tier deepened as it aged); `price-changed` when the original moved or someone cut deeper by hand;
+  `already-on-sale` when a higher compare-at was set by hand. A hand-RAISED sale price with the compare-at left in
+  place will be re-cut by the next run - use the tag below for products that must not move.
+- **Tag `no-clearance`** on a product keeps it out of every plan (`clearance.EXCLUDE_TAG`). Applied 2026-09-09 to
+  the four products Peter had reverted on 09-07 (Clark Griswold #242, Cousin Eddie, Derpy with Sussie, Courage
+  #1070) - the first Otto dry run would have re-cut them.
+- The plan CSV's `current_price` column is therefore the original price, not the live one.

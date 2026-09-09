@@ -83,3 +83,17 @@ def test_store_items_two_clocks_and_groups():
     assert by["22"][2] == "since last sale" and by["22"][0].age_days == (SNAP - dt.date(2026, 6, 1)).days
     assert by["11"][1].startswith("listed before") and by["33"][1].startswith("listed inside")
     assert by["11"][0].cost == 4.0 and by["22"][0].cost is None
+
+
+def test_store_items_original_price_and_opt_out():
+    hist = dt.date(2024, 9, 6)
+    prods = [
+        {"id": "gid://shopify/Product/1", "title": "On sale already", "tags": ["A"], "status": "ACTIVE",
+         "variants": [{"id": "gid://shopify/ProductVariant/11", "price": 10.49, "created_at": "2023-01-01T00:00:00Z"}]},
+        {"id": "gid://shopify/Product/2", "title": "Opted out", "tags": ["A", "no-clearance"], "status": "ACTIVE",
+         "variants": [{"id": "gid://shopify/ProductVariant/22", "price": 10, "created_at": "2023-01-01T00:00:00Z"}]},
+    ]
+    got = store_items(prods, [], {"11": 2, "22": 1}, {}, SNAP, hist, compare_at={"11": 12.99})
+    by = {it.row.variant_id: it for it, _, _ in got}
+    assert set(by) == {"11"}                      # the opted-out product is not in the plan at all
+    assert by["11"].row.price == 12.99            # the rule works from the original price, not the reduced one

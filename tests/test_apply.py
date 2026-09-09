@@ -47,6 +47,10 @@ def test_decide():
     assert decide({"price": 24.99, "compare_at": None, "product_id": "p1", "tags": []}, t) == "price-changed"
     assert decide({"price": 17.99, "compare_at": 21.99, "product_id": "p1", "tags": []}, t) == "already-applied"
     assert decide({"price": 21.99, "compare_at": 29.99, "product_id": "p1", "tags": []}, t) == "already-on-sale"
+    # already marked down at a shallower tier from the same original price: deepen it
+    assert decide({"price": 19.49, "compare_at": 21.99, "product_id": "p1", "tags": []}, t) == "apply"
+    # cut deeper by hand than the rule says: leave it
+    assert decide({"price": 15.99, "compare_at": 21.99, "product_id": "p1", "tags": []}, t) == "price-changed"
 
 
 def test_apply_dry_run_writes_nothing_then_apply_and_revert(tmp_path):

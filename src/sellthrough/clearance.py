@@ -55,6 +55,7 @@ def product_max_cut(title: str, tags=(), vendor: str = "") -> float | None:
     if not LOUNGEFLY_RE.search(text) or (OTHER_BAG_BRANDS_RE.search(text) and "loungefly" not in text.lower()):
         return None
     return LOUNGEFLY_HORROR_CAP if LOUNGEFLY_HORROR_RE.search(text) else LOUNGEFLY_CAP
+EXCLUDE_TAG = "no-clearance"   # the owner opted this product out for good (2026-09-09)
 LONG_STALE_DAYS = 400      # no sale within this many days: the full 20% regardless of the run cap
 LONG_STALE_CUT = 0.20
 
@@ -139,11 +140,17 @@ GROUPS = {
 
 
 def store_items(products: list[dict], orders: list[dict], qty: dict[str, int], cost: dict[str, float],
-                snapshot: dt.date, history_start: dt.date, exclude_emails: frozenset[str] = frozenset()
-                ) -> list[tuple[Overdue, str, str]]:
+                snapshot: dt.date, history_start: dt.date, exclude_emails: frozenset[str] = frozenset(),
+                compare_at: dict[str, float] | None = None) -> list[tuple[Overdue, str, str]]:
     """Every active product with stock on hand, with the clock the rule needs:
     days since listing for a product that has never sold, days since its last sale
-    otherwise. Returns (item, group, clock)."""
+    otherwise. Returns (item, group, clock).
+
+    The rule's price is the ORIGINAL price: a product already on clearance carries it as
+    compare-at, and that is what the tiers apply to. Working from the live (already reduced)
+    price compounded the cut week over week - caught on Otto's first dry run, 2026-09-09.
+    Products tagged EXCLUDE_TAG are left out entirely."""
+    compare_at = compare_at or {}
     from sellthrough.cohort import Row, gid_tail, is_non_merchandise, parse_ts
     last_sale: dict[str, dt.date] = {}
     for o in orders:
@@ -163,16 +170,21 @@ def store_items(products: list[dict], orders: list[dict], qty: dict[str, int], c
     for p in products:
         if p.get("status", "ACTIVE") != "ACTIVE" or is_non_merchandise(p["title"]):
             continue
+        if EXCLUDE_TAG in (p.get("tags") or ()):
+            continue
         for v in p["variants"]:
             vid = gid_tail(v["id"])
             q = qty.get(vid, 0)
             if q <= 0:
                 continue
+            price = float(v["price"])
+            if compare_at.get(vid, 0.0) > price:
+                price = compare_at[vid]              # already on sale: the rule works from the original price
             listed = parse_ts(v["created_at"]).date()
             sold = vid in last_sale
             clock_days = (snapshot - (last_sale[vid] if sold else listed)).days
             era = "old" if listed < history_start else "new"
-            row = Row(vid, gid_tail(p["id"]), p["title"], tuple(p.get("tags") or ()), float(v["price"]),
+            row = Row(vid, gid_tail(p["id"]), p["title"], tuple(p.get("tags") or ()), price,
                       listed, None, 0, max(clock_days, 0), per_day.get(listed, 1), snapshot)
             out.append((Overdue(row, max(clock_days, 0), float("nan"), q, cost.get(vid)),
                         GROUPS[(era, sold)], "since last sale" if sold else "since listing"))

@@ -15,7 +15,7 @@ INVENTORY_QUERY = """
 query($cursor: String) {
   productVariants(first: 250, after: $cursor) {
     pageInfo { hasNextPage endCursor }
-    edges { node { id inventoryQuantity inventoryItem { unitCost { amount } } } }
+    edges { node { id inventoryQuantity compareAtPrice inventoryItem { unitCost { amount } } } }
   }
 }"""
 
@@ -77,11 +77,13 @@ class ShopifyAdmin:
         raise RuntimeError("throttled by Shopify too many times in a row")
 
 
-def fetch_inventory(api: ShopifyAdmin) -> tuple[dict[str, int], dict[str, float]]:
-    """On-hand quantity per variant id (string tail of the gid), and the store's
-    "cost per item" where it is set. Needs read_inventory."""
+def fetch_inventory(api: ShopifyAdmin) -> tuple[dict[str, int], dict[str, float], dict[str, float]]:
+    """On-hand quantity per variant id (string tail of the gid), the store's "cost per item"
+    where it is set, and the compare-at price where one is set (a product already on sale:
+    that is its original price, which the clearance rule works from). Needs read_inventory."""
     qty: dict[str, int] = {}
     cost: dict[str, float] = {}
+    compare_at: dict[str, float] = {}
     cursor = None
     while True:
         page = api.graphql(INVENTORY_QUERY, {"cursor": cursor})["productVariants"]
@@ -92,6 +94,8 @@ def fetch_inventory(api: ShopifyAdmin) -> tuple[dict[str, int], dict[str, float]
             uc = (n.get("inventoryItem") or {}).get("unitCost")
             if uc and uc.get("amount") is not None:
                 cost[vid] = float(uc["amount"])
+            if n.get("compareAtPrice") is not None:
+                compare_at[vid] = float(n["compareAtPrice"])
         if not page["pageInfo"]["hasNextPage"]:
-            return qty, cost
+            return qty, cost, compare_at
         cursor = page["pageInfo"]["endCursor"]
