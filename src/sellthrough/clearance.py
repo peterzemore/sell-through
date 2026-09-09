@@ -7,6 +7,8 @@ Rule (set by the owner, 2026-09-07):
   - past that median by up to 90 days: 10% off; 91-180 days: 15%; more than 180: 20%;
   - never below a 10% margin over cost; the cut shrinks to the floor if it has to;
   - a per-run cap on the cut (15% for the first run);
+  - per-product ceilings (2026-09-08): Loungefly never past 12%, Loungefly horror/Halloween
+    lines never past 10% - hard limits that beat the long-stale rule too;
   - no cost on file, or already under the margin floor: listed, not cut.
 Prices land on a .99 ending. This module never writes to the store.
 """
@@ -15,6 +17,7 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +25,36 @@ from sellthrough.overdue import LevelCorrection, Overdue, sold_by_with_offset
 from sellthrough.models import DiscreteHazard
 
 TIERS = ((90, 0.10), (180, 0.15), (math.inf, 0.20))   # (days past median, cut)
+
+# Per-product ceilings (owner's rule, 2026-09-08): Loungefly bags hold value and ship as a
+# fixed-size box, so they never go past 12% - and the horror/Halloween lines (Pennywise,
+# Nightmare Before Christmas, Hocus Pocus, ...) never past 10%. These are HARD ceilings: they
+# also override the 400-day long-stale rule and the run cap. Matched on title (+ vendor/tags).
+# Loungefly bags are often listed without the brand in the title, so the product-line words
+# count too; other bag brands the store carries are excluded by name (2026-09-08 finding: 50
+# clearance cuts had slipped past the first, title-only version of this rule).
+LOUNGEFLY_RE = re.compile(
+    r"loungefly|mini[- ]?backpack|crossbody|cross[- ]body|crossbuddies|zip[- ]around|cosplay wallet|"
+    r"bifold wallet|figural backpack|double strap|convertible (mini )?backpack", re.I)
+OTHER_BAG_BRANDS_RE = re.compile(r"danielle nicole|wondapop|our universe|cakeworthy|bioworld|buckle-down|dooney|vera bradley", re.I)
+LOUNGEFLY_HORROR_RE = re.compile(
+    r"pennywise|\bit\b|nightmare before christmas|jack skellington|\bsally\b|oogie|hocus pocus|"
+    r"sanderson|binx|halloween|michael myers|chucky|child'?s play|freddy|elm street|friday the 13th|"
+    r"\bscream\b|ghost ?face|beetlejuice|gremlins|coraline|corpse bride|universal monsters|frankenstein|"
+    r"dracula|\bmummy\b|creature from|addams|wednesday|the shining|exorcist|chainsaw|leatherface|"
+    r"terrifier|art the clown|villains|evil stepmother|maleficent|ursula|jafar|cruella|chernabog|"
+    r"haunted mansion|annabelle|trick .?r treat|walking dead|zombie|skeleton|skull|\bwitch(es)?\b|"
+    r"vampire|spooky|horror|sleepy hollow|headless horseman|goosebumps|the crow|\bjaws\b", re.I)
+LOUNGEFLY_HORROR_CAP = 0.10
+LOUNGEFLY_CAP = 0.12
+
+
+def product_max_cut(title: str, tags=(), vendor: str = "") -> float | None:
+    """Hard ceiling on the cut for this product, or None if only the run cap applies."""
+    text = f"{title} {vendor} {' '.join(tags)}"
+    if not LOUNGEFLY_RE.search(text) or (OTHER_BAG_BRANDS_RE.search(text) and "loungefly" not in text.lower()):
+        return None
+    return LOUNGEFLY_HORROR_CAP if LOUNGEFLY_HORROR_RE.search(text) else LOUNGEFLY_CAP
 LONG_STALE_DAYS = 400      # no sale within this many days: the full 20% regardless of the run cap
 LONG_STALE_CUT = 0.20
 
@@ -75,6 +108,9 @@ def propose(item: Overdue, median: int | None, max_cut: float, min_margin: float
     else:
         tier_cut = next(c for limit, c in TIERS if past <= limit)
         cut = min(tier_cut, max_cut)
+    ceiling = product_max_cut(item.row.title, getattr(item.row, "tags", ()))
+    if ceiling is not None:
+        cut = min(cut, ceiling)                  # per-product ceiling beats every other rule
     if item.cost is None:
         return Proposal(item, median, past, tier_cut, cut, None, "no-cost", group, clock)
     margin_floor = item.cost / (1.0 - min_margin)

@@ -81,7 +81,9 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   corrected median lies beyond 360 days is treated as median 360 (`cut-median-capped`).
 - Output goes to `private/` (gitignored) because it carries per-product cost.
 - `apply` uses **bundle-tools' write-capable app** (`~/Projects/business/PeteZ PopZ/bundle-tools/.env`,
-  `write_products`), run from Peter's machine only, never from a service. Dry run by default;
+  `write_products`). Since 2026-09-09 it also runs weekly from **Otto** (`~/Projects/business/PeteZ PopZ/Otto`,
+  `otto.timer`, Mondays 05:00): pull -> clearance -> dry run -> apply if under a hold threshold -> #otto-updates.
+  Peter asked for that ("semi-continuous pricing"); the earlier "never from a service" rule is retired. Dry run by default;
   `--yes` writes; `--limit N` for a pilot batch. Each product is re-read first: `price-changed`
   (live price != plan) and `already-on-sale` (a compare-at above the plan price) are skipped, so
   a plan can be applied days after it was written without clobbering manual edits. Logs land in
@@ -110,3 +112,25 @@ plan: `~/.claude/plans/sell-through-scope.md`.
   `clearance` -> read `private/clearance_plan.md` -> `apply --limit` pilot -> `apply`.
 - `apply --yes` over the whole plan was blocked by the assistant's permission layer; Peter ran it
   himself with the `!` prefix. Expect the same next time.
+
+## Loungefly ceilings (Peter, 2026-09-08)
+
+- **Loungefly bags/wallets never go past 12% off; the horror/Halloween lines (Pennywise, Nightmare
+  Before Christmas, Hocus Pocus, Chucky, Coraline, Beetlejuice, Disney Villains, Halloween-themed
+  Mickey/Pooh, ...) never past 10%.** Hard ceilings in `clearance.py` (`product_max_cut()`,
+  `LOUNGEFLY_HORROR_RE`) that beat the tier, the run cap AND the 400-day long-stale rule.
+  Matched on title; the regex is deliberately broad on Halloween words - if a non-horror bag gets
+  the 10% cap that's the safe direction.
+- The 2026-09-07 run had already cut 60 Loungefly items past those caps (most at the 20% long-stale
+  cut). `private/reprice_loungefly_caps.py --apply` raised them back to the ceiling the same day;
+  log in `private/applied-loungefly-caps-20260908-110444.csv`. Compare-at and the `clearance` tag
+  were left alone. **`revert` will skip those 60** (their live price no longer equals the original
+  applied CSV's `new_price`) - to revert them use the loungefly-caps CSV's `old_price`.
+- **Same day, second pass:** the Pennywise Raincoat backpack showed the title-only match was too
+  narrow - 50 more applied cuts were Loungefly-line bags listed without the brand word. `LOUNGEFLY_RE`
+  now also matches the product-line words (mini-backpack, crossbody, crossbuddies, zip-around,
+  cosplay/bifold wallet, figural/double-strap/convertible backpack) and `OTHER_BAG_BRANDS_RE`
+  excludes Danielle Nicole / WondaPOP / Our Universe etc. unless "Loungefly" is in the text. 45 more
+  re-priced (`private/applied-loungefly-caps-20260908-113128.csv`). Every product the rule matches now
+  carries the tag `loungefly`; the storefront collection **Loungefly Sale** (`loungefly-sale`) is
+  automated on tag=clearance AND tag=loungefly. New Loungefly listings need that tag to show up there.
